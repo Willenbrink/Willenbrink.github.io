@@ -1,4 +1,0 @@
-(executable
- (name server)
- (libraries dream dream-livereload)
-)
