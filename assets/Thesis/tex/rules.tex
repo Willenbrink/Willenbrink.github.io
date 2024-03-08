@@ -1,0 +1,364 @@
+\section{Inference Rules}
+
+\NewDocumentCommand{\graybox}{ s m }{\colorbox{lightgray}{\IfBooleanT{#1}{$}#2\IfBooleanT{#1}{$}}}
+
+% We have two kind of frames: The normal stack frames (sframe) and finish frames (fframe). They take a number of arguments:
+% s:aligned? OL:variable assignments m:term OP:Permissions Ol:label
+\NewDocumentCommand{\sframe}{ s O{L} m O{P} O{l} }{\langle #2,\ \IfBooleanT{#1}{&&} #3,\ \IfBooleanT{#1}{&&} #4 \IfBooleanT{#1}{&&}\rangle^#5 \IfBooleanT{#1}{&&} }
+%s:aligned? m:id
+\NewDocumentCommand{\fframe}{ s m O{l} }{\IfBooleanT{#1}{&&} \langle \mathit{FINISH} #2 \rangle ^#3 }
+
+% We have three kinds of reductions: frame, stack and tasks. Each come with sensible defaults
+\NewDocumentCommand{\reducframe}{O{H} m O{H} m}{%
+  \begin{alignedat}{7}
+    #1, &#2\\\rightarrow\ #3, &#4
+  \end{alignedat}%
+}
+\NewDocumentCommand{\reducstack}{O{H} m O{FS} s O{H} m O{FS}}{%
+  \begin{alignedat}{7}
+    #1, &#2 \circ #3\\\twoheadrightarrow\ #5, &#6 \circ #7
+  \end{alignedat}%
+}
+\NewDocumentCommand{\reductasks}{m O{TS} s O{H} m O{TS}}{%
+  \begin{alignedat}{7}
+    H, &\{#1\} \uplus #2\\\leadsto\ #4, &\{#5\} \uplus #6
+  \end{alignedat}%
+}
+\NewDocumentCommand{\reducasync}{m m}{%
+  \begin{alignedat}{7}
+    H, & #1 \\\leadsto\ H, & #2
+  \end{alignedat}%
+}
+
+\subsection{Extension}
+\subsubsection{Typing}
+\graybox*{\inference[T-ASYNC]{
+  \mathit{Perm}[Q] \in \Gamma & \Gamma \setminus \mathit{Perm}[Q]; a \vdash s : \sigma\\
+  \Gamma; a \vdash b : Q \vartriangleright Box[C] & x : C; ocap \vdash t : \tau\\
+}{\Gamma; a \vdash \mathit{async}(b, x \Rightarrow t) \{ s \} : \bot}}
+
+\graybox*{\inference[T-FINISH]{
+    \Gamma; a \vdash t : \tau
+  }{\Gamma; a \vdash \mathit{finish} \{ t \} : null}}
+
+
+\subsubsection{Evaluation}
+\graybox*{\inference[E-ASYNC]{%
+  T_1 = (f, false, \sframe[[x \rightarrow o]]{t}[\emptyset][\epsilon]) & L(b) = b(o,p)\\
+  T_2 = (f, true, \sframe{s}[P\setminus \{p\}][\epsilon]) & p \in P \\
+}{%
+  \reducasync{
+    \{(f, k,%
+      \sframe{\mathit{async}(b, x \Rightarrow t)\{s\}} \circ FS
+    )\} \uplus TS%
+    }{
+    \{ T_1, T_2 \} \uplus TS%
+    }
+}}
+
+\graybox*{\inference[E-FINISH1]{%
+  T = (f', true, \sframe{t}[P][\epsilon]) &
+  f' \mathit{fresh}
+}{%
+  \reductasks{%
+    (f, k,%
+      \sframe{ \mathit{let}\ x = \mathit{finish} \{\ t\ \}\ \mathit{in}\ s} \circ FS%
+    )
+  }{%
+    (f, k,%
+      \fframe{f'}[m] \circ \sframe{s} \circ FS%
+    )
+  }[\{T\} \uplus TS]
+}}
+
+\graybox*{\inference[E-FINISH2]{%
+  \nexists (f', b', FS) \in TS
+}{%
+  \reductasks{%
+    (f, k, \fframe{f'}[l] \circ \sframe{t} \circ FS )%
+  }{%
+    (f, k, \sframe[L[l \rightarrow \mathit{null}]]{t} \circ FS )%
+  }
+}}
+
+
+\graybox*{\inference[E-TASK-DONE]{}{
+  H,\{ (f, k, \epsilon) \} \uplus TS \leadsto TS
+}}
+
+
+\subsection{LaCasa}
+\subsubsection{Well-Formedness}
+
+\inference[WF-VAR]{%
+  L(x) = \mathit{null} \vee \\%
+  L(x) = o \wedge \mathit{typeof}(H,o) <: \Gamma(x) \vee \\%
+  L(x) = b(o,p) \wedge \Gamma(x) = Q \vartriangleright Box[C] \wedge \mathit{typeof}(H,o) <: C%
+}{H \vdash \Gamma ; L; x}
+
+\inference[]{}{}
+\inference[WF-PERM]{
+  \gamma : permTypes(\Gamma) \longrightarrow P injective \\
+  \forall x \in dom(\Gamma). \\
+  (\Gamma(x) = Q \vartriangleright Box[C] \wedge L(x) = b(o,p) \wedge Perm[Q] \in \Gamma) \\
+  \Longrightarrow \gamma(Q) = p}{\vdash \Gamma; L; P}
+\inference[]{}{}
+\inference[WF-ENV]{dom(\Gamma) \subseteq dom(L) \\
+\forall x \in dom(\Gamma). H \vdash \Gamma; L; x}{H \vdash \Gamma; L}
+\inference[]{}{}
+\inference[WF-METHOD1]{\Gamma_0, this : C, x : D; \epsilon \vdash t : E' & E' <: E}{C \vdash def m(x : D) : E = t}
+\inference[]{}{}
+\inference[WF-METHOD2]{\Gamma = \Gamma_0, this : C, x : Q \vartriangleright Box[D], Perm[Q] & Q fresh & \Gamma; \epsilon \vdash t : E' & E' <: E}{C \vdash def m(x : Box[D]) : E = t}
+\inference[]{}{}
+\inference[WF-PROGRAM]{p \vdash \bar{cd} & p \vdash \Gamma_0 & \Gamma_0; \epsilon \vdash t : \sigma}{p \vdash \bar{cd} \bar{vd} t}
+\inference[]{}{}
+\inference[WF-CLASS]{C \vdash \bar{md} & D = AnyRef \vee p \vdash class D ... \\
+  \forall (def m ...) \in \bar{md}. override(m, C, D) \\
+\forall var f : \sigma \in \bar{fd}. f \notin fields(D)}{p \vdash class C extends D \{\bar{fd} \bar{md}\}}
+\inference[]{}{}
+\inference[WF-OVERRIDE]{mtype(m, D) not defined \vee mtype(m, D) = mtype(m, C)}{override(m, C, D)}
+
+
+\subsubsection{Typing}
+\inference[T-NULL]{}{\Gamma; a \vdash null : Null}
+\inference[]{}{}
+\inference[T-VAR]{x \in dom(\Gamma)}{\Gamma; a \vdash x : \Gamma(x)}
+\inference[]{}{}
+\inference[T-LET]{\Gamma; a \vdash e : \tau & \Gamma, x : \tau; a \vdash t : \sigma}{\Gamma; a \vdash let x = e in t : \sigma}
+\inference[]{}{}
+\inference[T-SELECT]{\Gamma; a \vdash x : C & ftype(C, f) = D}{\Gamma; a \vdash x.f : D}
+\inference[]{}{}
+\inference[T-ASSIGN]{\Gamma; a \vdash x : C & ftype(C, f) = D \\ \Gamma; a \vdash y : D' & D' <: D}{\Gamma; a \vdash x.f = y : D}
+\inference[]{}{}
+\inference[T-INVOKE]{\Gamma; a \vdash x : C & mtype(C,m) = \sigma \rightarrow \tau \\
+  \Gamma; a \vdash y : \sigma' & \sigma' <: \sigma \vee \\
+(\sigma = Box[D] \wedge \sigma' = Q \vartriangleright Box[D] \wedge Perm[Q] \in \Gamma)}{\Gamma; a \vdash x.m(y) : \tau}
+\inference[]{}{}
+\inference[T-NEW]{a = ocap \Longrightarrow ocap(C) & \forall var f : \sigma \in \bar{fd} . \exists D. \sigma = D}{\Gamma; a \vdash new C : C}
+\inference[]{}{}
+\inference[T-OPEN]{\Gamma; a \vdash x : Q \vartriangleright Box[C] & Perm[Q] \in \Gamma & y : C; ocap \vdash t : \sigma}{\Gamma; a \vdash x.open \{y \Rightarrow t\} : Q \vartriangleright Box[C]}
+\inference[]{}{}
+\inference[T-BOX]{ocap(C) & Q fresh & \Gamma; x : Q \vartriangleright Box[C]; Perm[Q]; a \vdash t : \sigma}{\Gamma; a \vdash box[C] \{x \Rightarrow t \} : \bot}
+\inference[]{}{}
+\inference[T-CAPTURE]{\Gamma; a \vdash x : Q \vartriangleright Box[C] & \Gamma; a \vdash y : Q' \vartriangleright Box[D] \\
+  \{Perm[Q], Perm[Q']\} \subseteq \Gamma & D <: ftype(C,f) \\
+\Gamma \ \{Perm[Q']\}, z : Q \vartriangleright Box[C]; a \vdash t : \sigma}{\Gamma; a \vdash capture(x.f,y) \{z \Rightarrow t\} : \bot}
+\inference[]{}{}
+\inference[T-SWAP]{\Gamma; a \vdash x : Q \vartriangleright Box[C] & \Gamma; a \vdash y : Q' \vartriangleright Box[D'] \\
+  \{Perm[Q], Perm[Q']\} \subseteq \Gamma & ftype(C,f) = Box[D] \\
+  D' <: D & R fresh \\
+\Gamma \ \{Perm[Q']\}, z : R \vartriangleright Box[D], Perm[R]; a \vdash t : \sigma}{\Gamma; a \vdash swap(x.f, y) \{z \Rightarrow t\} : \bot}
+\inference[]{}{}
+\inference[T-EMPFS]{}{H \vdash \epsilon}
+\inference[]{}{}
+\todo{previously: $H \vdash \Gamma; L; P$ but that rule doesn't take a heap.}
+\inference[T-FRAME1]{\Gamma; a \vdash t : \sigma & l \neq \epsilon \Longrightarrow \sigma <: C \\%
+  H \vdash \Gamma; L & \vdash \Gamma; L; P}{H \vdash \sframe{t} : \sigma}
+\inference[]{}{}
+\inference[T-FRAME2]{\Gamma; x : \tau; a \vdash t : \sigma & l \neq \epsilon \Longrightarrow \sigma <: C \\%
+  H \vdash \Gamma; L & H \vdash \Gamma; L; P}{H \vdash^\tau_x \sframe{t} : \sigma}
+\inference[]{}{}
+\inference[T-FRAME-NA]{H \vdash F^\epsilon : \sigma & H \vdash FS}{H \vdash F^\epsilon \circ FS}
+\inference[]{}{}
+\inference[T-FRAME-NA2]{H \vdash^\tau_x F^\epsilon : \sigma & H \vdash FS}{H \vdash^\tau_x F^\epsilon \circ FS}
+\inference[]{}{}
+\inference[T-FRAME-A]{H \vdash F^x : \sigma & H \vdash^\sigma_x FS}{H \vdash F^x \circ FS}
+\inference[]{}{}
+\inference[T-FRAME-A2]{H \vdash^\tau_x F^y : \sigma & H \vdash^\sigma_y FS}{H \vdash^\tau_x F^y \circ FS}
+\inference[]{}{}
+\graybox*{
+  \inference[T-TS]{\forall (f, k, FS) \in TS. H \vdash FS}{H \vdash TS}
+}
+
+
+
+\subsubsection{Evaluation}
+\inference[E-NULL]{}{\reducframe{\sframe{let x = null in t}}{\sframe[L[x \rightarrow null]]{t}}}
+\inference[]{}{}
+\inference[E-VAR]{}{\reducframe{\sframe{let x = y in t}}{\sframe[L[x \rightarrow L(y)]]{t}}}
+\inference[]{}{}
+\inference[E-SELECT]{H(L(y)) = \langle C, FM \rangle & f \in dom(FM)}{\reducframe{\sframe{let x = y.f in t}}{\sframe[L[x \rightarrow FM(f)]]{t}}}
+\inference[]{}{}
+\inference[E-ASSIGN]{L(y) = o & H(o) = \langle C, FM \rangle \\
+  H' = H[o \rightarrow \langle C, FM[f \rightarrow L(z)]]}{
+  \reducframe{\sframe{let x = y.f = z in t}}[H']{\sframe{let x = z in t}}}
+\inference[]{}{}
+\inference[E-NEW]{o \notin dom(H) & fields(C) = \bar{f}\\
+H' = H[o \rightarrow \langle C, f \rightarrow null \rangle]}{\reducframe{\sframe{let x = new C in t}}[H']{\sframe[L[x \rightarrow o]]{t}}}
+\inference[]{}{}
+\inference[E-INVOKE]{
+  H(L(y)) = \langle C, FM \rangle & mbody(C, m) = x \rightarrow t'\\
+  \graybox*{
+    \neg ocap(C) \Rightarrow L' = L_0[this \rightarrow L(y), x \rightarrow L(z)]\\
+  }\\
+  \graybox*{
+    ocap(C) \Rightarrow L' = [this \rightarrow L(y), x \rightarrow L(z)]\\
+  }\\
+  P' = \emptyset \vee (L(z) = b(o, p) \wedge p \in P \wedge P' = \{ p \})
+}{\reducstack{\sframe{let x = y.m(z) in t}}{\sframe[L']{t'}[P'][x] \circ \sframe{t}}}
+\inference[]{}{}
+\inference[E-RETURN1]{}{\reducframe{\sframe{x}[P][y] \circ \sframe[L']{t'}[P']}{\sframe[L'[y \rightarrow L(x)]]{t'}[P']}}
+\inference[]{}{}
+\inference[E-RETURN2]{}{\reducframe{\sframe{x}[P][\epsilon] \circ \sframe[L']{t'}[P']}{\sframe[L']{t'}[P']}}
+\inference[]{}{}
+\inference[E-OPEN]{L(y) = b(o,p) & p \in P & L'= [z \rightarrow o]}{\reducstack{
+    \sframe{let x = y.open \{ z \Rightarrow t'\} in t}
+  }{
+    \sframe[L']{t'}[\emptyset][\epsilon] \circ \sframe[L[x \rightarrow L(y)]]{t}
+  }}
+\inference[]{}{}
+\inference[E-BOX]{o \notin dom(H) & fields(C) = \bar{f}\\
+  H' = H[ o \rightarrow \langle C, f \rightarrow null \rangle ] & p fresh\\
+  \graybox*{TS' = \{T \in TS. k \Rightarrow \neg ancestor(TS, T, f)\}}
+}{
+  \reductasks{
+    f, k, \sframe{box[C]\{x \Rightarrow t\}}
+  }*[H']{
+    f, k, \sframe[L[x \rightarrow b(o,p)]]{t}[P \cup \{p\}][\epsilon] \circ \epsilon
+  }[TS']
+}
+\inference[]{}{}
+\inference[E-CAPTURE]{L(x) = b(o,p) & L(y) = b(o', p') & \{p, p'\} \subseteq P\\
+  H(o) = \langle C, FM \rangle & H' = H[ o \rightarrow \langle C, FM[ f \rightarrow o' ] \rangle ]\\
+  \graybox*{TS' = \{T \in TS. k \Rightarrow \neg ancestor(TS, T, f)\}}
+}{
+  \reductasks{
+    f, k, \sframe{capture(x.f, y) \{ z \Rightarrow t\}}
+  }*[H']{
+    f, k, \sframe[L[z \rightarrow L(x)]]{t}[P \setminus \{p'\}][\epsilon] \circ \epsilon
+  }[TS']
+}
+\inference[]{}{}
+\inference[E-SWAP]{L(x) = b(o,p) & L(y) = b(o', p') & \{p, p'\} \subseteq P\\
+  H(o) = \langle C, FM \rangle & FM(f) = o'' & p'' fresh\\
+  H' = H[o \rightarrow \langle C, FM[f \rightarrow o'] \rangle ]\\
+  \graybox*{TS' = \{T \in TS. k \Rightarrow \neg ancestor(TS, T, f)\}}
+}{
+  \reductasks{
+    \sframe{swap(x.f,y) \{ z \Rightarrow t\}}
+  }*[H']{
+    \sframe[L[z \rightarrow b(o'', p'')]]{t}[(P \setminus \{ p' \}) \cup \{p''\}][\epsilon] \circ \epsilon
+  }[TS']
+}
+\inference[]{}{}
+
+\subsubsection{Definitions}
+\begin{definition}[Object Type]
+  For an object identifier $o \in dom(H)$ where $H(o) = \langle C, FM \rangle$, $typeof(H, o) := C$
+\end{definition}
+
+\begin{definition}[Well-typed Heap]
+A heap $H$ is well-typed, written $\vdash H : \star$, iff
+\begin{equation}
+\begin{split}
+  \forall o \in dom(H). & H(o) = \langle C, FM \rangle \Longrightarrow\\
+                        & (dom(FM) = fields(C) \wedge\\
+                        & \forall f \in dom(FM). FM(f)= null \vee typeof(H, FM(f)) <: ftype(C, f))
+\end{split}
+\end{equation}
+\end{definition}
+
+\begin{definition}[Separation]
+  Two object identifiers $o$ and $o'$ are separate in heap $H$, written $sep(H, o, o')$, iff $\forall q, q' \in dom(H). reach(H, o, q) \wedge reach(H, o', q') \Longrightarrow q \neq q'$.
+\end{definition}
+
+\subsubsection{Other}
+\graybox*{\inference[ANC-DIRECT]{T = (f', k, FS) & FS = \fframe{f} \circ FS'}{ancestor(TS, T, f)}}
+
+\inference[]{}{}
+
+\graybox*{\inference[ANC-INDIRECT]{T' = (f', true, FS) & FS = \fframe{f} \circ FS' & ancestor(TS, T, f')}{ancestor(TS, T, f)}}
+\inference[]{}{}
+\inference[ACC-F]{x \rightarrow o \in L \vee (x \rightarrow b(o,p) \in L \wedge p \in P)}{accRoot(o, \langle L, t, P \rangle ^ l)}
+\inference[]{}{}
+
+\inference[ACC-FS]{accRoot(o, F) \vee accRoot(o, FS)}{accRoot(o, F \circ FS)}
+\inference[]{}{}
+\inference[ISO-FS]{
+  \forall o, o' \in dom(H). (accRoot(o, FS) \wedge accRoot(o', FS')) \Rightarrow sep(H, o, o')\\
+}{isolated(H, FS, FS')}
+\inference[]{}{}
+\graybox*{\inference[ISO-TS]{
+    \forall T_1, T_2 \in TS. T_1 = (f, k, FS) \wedge T_2 = (g, k', GS) \wedge T_1 \neq T_2 \Rightarrow\\
+    isolated(H, FS, GS) \vee\\
+  FS = \fframe{f'} \circ FS' \wedge awaits(TS, f', g) \vee\\
+  GS = \fframe{g'}[m] \circ GS' \wedge awaits(TS, g', f)
+}{isolated(H, TS)}}
+
+\inference[]{}{}
+\inference[F-OK]{boxSep(H,F) & boxObjSep(H,F) & boxOcap(H,F) \\
+a = ocap \Longrightarrow globalOcapSep(H,F) & fieldUniqueness(H,F)}{H; a \vdash F ok}
+\inference[]{}{}
+\inference[SINGFS-OK]{H; a \vdash F ok}{H; a \vdash F \circ \epsilon ok}
+% \inference[]{\begin{cases} a & b \\ c & d \end{cases}}{test}
+\inference[]{}{}
+\todo{I can't for the life of me figure out how to write a cases environment inside of the premises. Or dcases. Or any other solution. I mean, it should be obvious right? Just use some kind of box/frame/whatever command that hides the inner typesetting from the inference command but nope, can't figure out how to do that either. Manually typesetting brace size, phantom things etc. seems like a very brittle solution}
+\inference[FS-OK]{
+  H; b \vdash F^l ok & H; a \vdash FS ok\\
+  (a = ocap \vee l = \epsilon) \Rightarrow b = ocap\\
+  \neg (a = ocap \vee l = \epsilon) \Rightarrow b = \epsilon\\
+  boxSeparation(H, F, FS)\\
+  uniqueOpenBox(H, F, FS)\\
+  openBoxPropagation(H, F^l, FS)\\
+}{H; b \vdash F^l \circ FS ok}
+\inference[]{}{}
+\todo{at most one T exists such that ancestor etc. I.e. we might not have a single non-ocap thread. We might also have only inactive threads being non-ocap. Perhaps rephrase with id instead of task?}
+\graybox*{
+  \inference[TS-OK]{
+    \forall T \in TS. T = (f, k, \fframe{f'} \circ FS) \Rightarrow \\
+    (f < f' \wedge \not \exists U \in TS \setminus \{T\}. U = (f', k', \fframe{f'} \circ FS'))\\
+    \exists T \in TS. (\{T' \in TS. ancestor(TS, T', T)\} \wedge\\
+    \forall U \in TS. U = (f, k, FS) \Rightarrow H; ocap \vdash FS ok \vee U \in TS' \wedge H; a \vdash FS ok)\\
+  }{H \vdash TS ok}
+}
+
+\subsubsection{Predicates}
+\graybox*{%
+\inference[]{\exists (f,k,FS) \in TS. FS = \fframe{f'} \circ FS' & awaits(TS, f', g)}{awaits(TS, f, g)}%
+}
+
+\graybox*{%
+\inference[]{}{awaits(TS,f,f)}%
+}
+
+% \graybox*{%
+% \inference[]{FS = \fframe{f'} \circ FS' & awaits(TS, f', g)}{awaits(TS, (f, FS), (g, GS))}%
+% }
+
+
+\inference[]{}{}
+% TODO reach-def from deterministic concurrency MA paper
+\inference[]{o \in dom(H)}{reach(H, o, o)}
+\inference[]{}{}
+\inference[]{o \in dom(H) & H(o) = \langle C, FM \rangle\\
+% TODO which formulation should be preferred?
+  \exists f \rightarrow o'' \in FM. reach(H, o'', o')\\
+  o'' \in codom(FM) & reach(H, o'', o')
+}{reach(H, o, o')}
+\inference[]{}{}
+\inference[]{x \rightarrow b(o,p) \in L & p \in P}{boxRoot(o, \sframe{t})}
+\inference[]{}{}
+\inference[]{boxRoot(o, F)}{boxRoot(o, F \circ \epsilon)}
+\inference[]{}{}
+\inference[]{boxRoot(o, F) \vee boxRoot(o, FS)}{boxRoot(o, F \circ FS)}
+\inference[]{}{}
+\inference[]{}{}
+\inference[]{x \rightarrow b(o,p) \in L & p \in P}{boxRoot(o, \sframe{t}, p)}
+\inference[]{}{}
+\inference[]{boxRoot(o, F, p)}{boxRoot(o, F \circ \epsilon, p)}
+\inference[]{}{}
+\inference[]{boxRoot(o, F, p) \vee boxRoot(o, FS, p)}{boxRoot(o, F \circ FS, p)}
+\inference[]{}{}
+\inference[]{boxRoot(o, FS) & x \rightarrow o' \in env(F) & reach(H, o, o')}{openbox(H, o, F, FS)}
+\inference[]{}{}
+
+\subsubsection{Subtyping}
+\inference[<:-BOT]{}{\bot <: \tau}
+
+\inference[<:-BOX]{C <: D}{Box[C] <: Box[D]}
+
+\inference[<:-NULL]{}{Null <: \tau}
+
+% TODO
+% OCAP appendix
+% Rest of subtyping rules

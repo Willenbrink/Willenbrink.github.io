@@ -170,12 +170,12 @@ nopostdot]{glossaries}
 % insert the configuration information with author(s), examiner, supervisor(s), ...
 \input{custom_configuration}
 
-\title{This is the title in the language of the thesis}
-\subtitle{A subtitle in the language of the thesis}
+\title{A Type System for Ensuring Safe, Structured Concurrency in Scala}
+% \subtitle{A subtitle in the language of the thesis}
 
 % give the alternative title - i.e., if the thesis is in English, then give a Swedish title
-\alttitle{Detta är den svenska översättningen av titeln}
-\altsubtitle{Detta är den svenska översättningen av undertiteln}
+\alttitle{Ett typsystem för säker och strukturerad }
+% \altsubtitle{Detta är den svenska översättningen av undertiteln}
 % alternative, if the thesis is in Swedish, then give an English title
 %\alttitle{This is the English translation of the title}
 %\altsubtitle{This is the English translation of the subtitle}
@@ -321,8 +321,14 @@ nopostdot]{glossaries}
 
 %% TODO Added by me
 \usepackage{semantic}
+\usepackage{mathtools}
 \usepackage{amssymb}
+\usepackage{amsthm}
 \usepackage{xparse}
+
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
 
 
 \begin{document}
@@ -342,8 +348,40 @@ nopostdot]{glossaries}
 
 % Frontmatter includes the abstracts and table-of-contents
 \frontmatter
+\tableofcontents
 \setcounter{page}{1}
-\input{rules}
+
+\chapter{Introduction}
+\chapter{Background}
+\section{Type Systems}
+\section{Structured Concurrency}
+\section{Concurrent Determinism}
+\chapter{Related Work}
+\section{LaCasa}
+\section{DPJ}
+\section{Rust}
+\section{Deterministic Concurrency Using Lattices}
+\chapter{Proposed Extension}
+\section{Overview}
+\section{Formalization}
+\chapter{Properties}
+\section{Progress}
+
+\section{Preservation}
+\section{Confluence}
+\chapter{Conclusion}
+\section{Future Work}
+\chapter{Appendix}
+\section{Proofs}
+% \include{tex/introduction}
+% \include{tex/background}
+% \include{tex/related_work}
+% \include{tex/proposed_extension}
+% \include{tex/formalization}
+% \include{tex/evaluation}
+% \include{tex/conclusion}
+
+\input{tex/rules}
 
 
 
